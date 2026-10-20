@@ -727,7 +727,17 @@ const idb = (() => {
 })();
 
 /* ---------- rest timer ---------- */
+const TIMER_KEY = 'cut-tracker-timer';
 let timerEnd = null, timerInt = null, actx = null;
+function restoreTimer(){
+  const saved = Number(localStorage.getItem(TIMER_KEY));
+  if (saved && saved > Date.now()) {
+    timerEnd = saved;
+    clearInterval(timerInt); timerInt = setInterval(tickTimer, 250);
+  } else if (saved) {
+    localStorage.removeItem(TIMER_KEY);
+  }
+}
 function renderTimer(){
   const el = document.getElementById('timer');
   const show = tab === 'today' && (timerEnd || typeOf(sel) !== 'rest');
@@ -740,9 +750,10 @@ function renderTimer(){
 function startTimer(sec){
   try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch(e) {}
   timerEnd = Date.now() + sec * 1000;
+  localStorage.setItem(TIMER_KEY, timerEnd);
   clearInterval(timerInt); timerInt = setInterval(tickTimer, 250); renderTimer();
 }
-function stopTimer(){ timerEnd = null; clearInterval(timerInt); renderTimer(); }
+function stopTimer(){ timerEnd = null; localStorage.removeItem(TIMER_KEY); clearInterval(timerInt); renderTimer(); }
 function tickTimer(){
   if (!timerEnd) return;
   if (Date.now() >= timerEnd) { stopTimer(); beep(); toast('Rest over — next set! 💪'); return; }
@@ -1114,7 +1125,7 @@ document.getElementById('tabs').addEventListener('click', e => { const b = e.tar
 
 document.addEventListener('click', e => {
   const tb = e.target.closest('[data-timer]');
-  if (tb) { const v = tb.dataset.timer; if (v === 'stop') stopTimer(); else if (v === '+30') { timerEnd += 30000; tickTimer(); } else startTimer(Number(v)); return; }
+  if (tb) { const v = tb.dataset.timer; if (v === 'stop') stopTimer(); else if (v === '+30') { timerEnd += 30000; localStorage.setItem(TIMER_KEY, timerEnd); tickTimer(); } else startTimer(Number(v)); return; }
   const nav = e.target.closest('[data-nav]');
   if (nav) { sel = nav.dataset.nav === 'today' ? todayKey() : addDays(sel, Number(nav.dataset.nav)); renderToday(); return; }
   const cal = e.target.closest('[data-cal]');
@@ -1242,7 +1253,7 @@ setInterval(() => { const t = todayKey(); if (t !== lastToday) { if (sel === las
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   const t = todayKey(); if (t !== lastToday) { if (sel === lastToday) sel = t; lastToday = t; render(); }
-  if (timerEnd) tickTimer();
+  if (timerEnd) { clearInterval(timerInt); timerInt = setInterval(tickTimer, 250); tickTimer(); }
   doSync(false);
 });
 
@@ -1251,6 +1262,7 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 }
 
 checkRewards(); // seeds reward state silently on first run
+restoreTimer();
 render();
 doSync(false);
 </script>
